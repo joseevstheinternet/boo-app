@@ -526,46 +526,32 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!coupleId) return;
 
-    // 기존 리스너 정리
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current();
-    }
+    const startTime = Date.now();
+    console.log('📥 Loading messages START');
 
-    const q = query(
-      collection(db, 'couples', coupleId, 'messages'),
-      orderBy('createdAt', 'desc'),
-      limit(50),
-    );
+    const messagesRef = collection(db, 'couples', coupleId, 'messages');
+    const q = query(messagesRef, orderBy('createdAt', 'desc'), limit(50));
 
-    const unsub = onSnapshot(q, snap => {
-      const newMessages = snap.docs.map(d => ({
-        id: d.id,
-        text: d.data().text ?? '',
-        senderId: d.data().senderId,
-        createdAt: d.data().createdAt ?? null,
-        read: d.data().read ?? false,
-        imageUrl: d.data().imageUrl,
-        imageUrls: d.data().imageUrls,
-        reactions: d.data().reactions ?? {},
-        replyTo: d.data().replyTo ?? undefined,
-      })).reverse();
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const elapsed = Date.now() - startTime;
+      console.log(`📊 Received ${snap.docs.length} messages in ${elapsed}ms`);
 
-      setMessages(newMessages);
+      const data = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Message))
+        .reverse();
 
-      // 전체 메시지 ID 목록 갱신 (pagination용)
-      if (snap.docs.length > 0) {
-        lastVisibleDocRef.current = snap.docs[0]; // 가장 오래된 문서
-        setAllMessageIds(newMessages.map(m => m.id));
-      }
-    }, err => console.error('messages listener:', err));
+      setMessages(data);
 
-    unsubscribeRef.current = unsub;
-    return () => {
-      unsub();
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
-    };
+      setTimeout(() => {
+        try {
+          flatListRef.current?.scrollToEnd({ animated: false });
+        } catch (e) {
+          console.error('❌ Scroll error:', e);
+        }
+      }, 500);
+    });
+
+    return () => unsubscribe();
   }, [coupleId]);
 
   // ── 읽음 처리 ──────────────────────────────────────────────────────────────
@@ -895,6 +881,12 @@ export default function ChatScreen() {
                 removeClippedSubviews={true}
                 onEndReached={handleLoadMore}
                 onEndReachedThreshold={0.5}
+                scrollEnabled={true}
+                nestedScrollEnabled={true}
+                onContentSizeChange={() => {
+                  console.log('📏 Content size changed');
+                  flatListRef.current?.scrollToEnd({ animated: false });
+                }}
                 renderItem={({ item }) => {
                   if (item.type === 'separator') {
                     return (

@@ -135,28 +135,27 @@ export default function ConnectScreen() {
 
   async function initUser() {
     try {
-      // 1. AsyncStorage에서 코드 먼저 확인 (Expo Go 세션 초기화 우회)
-      const cached = await AsyncStorage.getItem('myInviteCode');
-      if (cached) {
-        setMyCode(cached);
+      const uid = auth.currentUser?.uid ?? (await AsyncStorage.getItem('userUid')) ?? '';
+      console.log('uid:', uid);
+
+      if (!uid) {
+        setLoadingCode(false);
         return;
       }
 
-      // 2. _layout.tsx에서 이미 로그인 완료 → auth.currentUser 사용
-      //    Expo Go 세션 리셋 대비: AsyncStorage uid 폴백
-      const uid =
-        auth.currentUser?.uid ?? (await AsyncStorage.getItem('userUid')) ?? '';
-      if (!uid) return;
-
+      // Firebase에서 확인 (AsyncStorage 캐시 무시)
       const userSnap = await getDoc(doc(db, 'users', uid));
+      console.log('Firebase myCode:', userSnap.data()?.myCode);
 
       if (userSnap.exists() && userSnap.data().myCode) {
-        const code: string = userSnap.data().myCode;
+        const code = userSnap.data().myCode;
+        console.log('Found in Firebase:', code);
         await AsyncStorage.setItem('myInviteCode', code);
         setMyCode(code);
       } else {
-        // 3. Firebase에도 없으면 새로 생성
+        console.log('Not found in Firebase, creating new code');
         const code = await createUniqueCode(uid);
+        console.log('Created:', code);
         setMyCode(code);
       }
     } catch (e) {
@@ -169,15 +168,37 @@ export default function ConnectScreen() {
   async function createUniqueCode(uid: string): Promise<string> {
     let code = '';
     let exists = true;
-    while (exists) {
+    let attempts = 0;
+
+    while (exists && attempts < 10) {
       code = generateCode();
       const snap = await getDoc(doc(db, 'invite_codes', code));
       exists = snap.exists();
+      attempts++;
     }
-    await setDoc(doc(db, 'invite_codes', code), { uid, createdAt: new Date() });
-    await setDoc(doc(db, 'users', uid), { myCode: code }, { merge: true });
-    await AsyncStorage.setItem('myInviteCode', code); // AsyncStorage에도 저장
-    return code;
+
+    if (attempts >= 10) {
+      console.error('Failed to generate unique code after 10 attempts');
+      throw new Error('코드 생성 실패');
+    }
+
+    console.log('Saving invite code:', code, 'for uid:', uid);
+
+    try {
+      await setDoc(doc(db, 'invite_codes', code), { uid, createdAt: new Date() });
+      console.log('Saved to invite_codes');
+
+      await setDoc(doc(db, 'users', uid), { myCode: code }, { merge: true });
+      console.log('Saved to users');
+
+      await AsyncStorage.setItem('myInviteCode', code);
+      console.log('Saved to AsyncStorage');
+
+      return code;
+    } catch (e) {
+      console.error('createUniqueCode error:', e);
+      throw e;
+    }
   }
 
   // ── 코드 복사 ──
@@ -413,9 +434,13 @@ export default function ConnectScreen() {
           <TouchableOpacity
             style={[styles.devBtn, { marginTop: 12, backgroundColor: '#E3F2FD' }]}
             onPress={async () => {
+              console.log('🔍 uid 확인 버튼 눌렸음');
               const uid = auth.currentUser?.uid ?? (await AsyncStorage.getItem('userUid')) ?? '';
               const cid = await AsyncStorage.getItem('coupleId') ?? '';
               const myCode = await AsyncStorage.getItem('myInviteCode') ?? '';
+              console.log('uid:', uid);
+              console.log('coupleId:', cid);
+              console.log('myCode:', myCode);
               Alert.alert(
                 'Connect 화면 - uid 확인',
                 `auth.currentUser?.uid: ${auth.currentUser?.uid || 'null'}\n` +
