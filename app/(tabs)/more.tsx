@@ -740,10 +740,20 @@ export default function MoreScreen() {
         }
         console.error('account delete error:', e);
       }
+
+      // 완전히 초기화 확인
+      await AsyncStorage.removeItem('coupleId');
+      await AsyncStorage.removeItem('coupleRole');
+      await AsyncStorage.removeItem('setupComplete');
+      await AsyncStorage.removeItem('profileComplete');
     }
 
     // AsyncStorage 초기화 (userUid 제외)
-    await AsyncStorage.multiRemove(['coupleId', 'coupleRole', 'setupComplete', 'profileComplete']);
+    try {
+      await AsyncStorage.multiRemove(['coupleId', 'coupleRole', 'setupComplete', 'profileComplete']);
+    } catch (e) {
+      console.error('AsyncStorage clear error:', e);
+    }
   }
 
   // ── 연결 끊기 ─────────────────────────────────────────────────────────────
@@ -907,9 +917,9 @@ export default function MoreScreen() {
     const title = '';
     const message = hasEmail
       ? '로그아웃 하시겠어요?'
-      : '재로그인에 필요한 이메일이 등록되지 않았어요!\n계정 등록 후 로그아웃을 권장드려요.\n정말 로그아웃하시겠어요?';
+      : '⚠️ 이메일 등록이 없어요!\n로그아웃하면 이 기기의 모든 데이터가 초기화돼요.\n정말 로그아웃하시겠어요?';
 
-    const confirmText = hasEmail ? '로그아웃' : '확인';
+    const confirmText = hasEmail ? '로그아웃' : '초기화하고 나가기';
 
     Alert.alert(title, message, [
       { text: '취소', style: 'cancel' },
@@ -918,10 +928,16 @@ export default function MoreScreen() {
         style: 'destructive',
         onPress: async () => {
           await signOut(auth);
-          // 로그아웃 후 기기 uid로 자동 로그인 (또는 /connect로 이동)
-          // AsyncStorage의 coupleId만 삭제 (userUid는 유지)
-          await AsyncStorage.multiRemove(['coupleId', 'coupleRole', 'setupComplete', 'profileComplete']);
-          router.replace('/connect');
+
+          if (hasEmail) {
+            // 이메일 연동: login 화면으로 (재로그인 가능)
+            await AsyncStorage.multiRemove(['coupleId', 'coupleRole', 'setupComplete', 'profileComplete']);
+            router.replace('/login');
+          } else {
+            // 이메일 없음: 완전 초기화 (새 기기처럼)
+            await AsyncStorage.clear();
+            router.replace('/connect');
+          }
         },
       },
     ]);
@@ -1097,29 +1113,79 @@ export default function MoreScreen() {
         {__DEV__ && (
           <View style={s.section}>
             <Text style={s.sectionTitle}>개발</Text>
+
+            {/* AsyncStorage 확인 */}
+            <TouchableOpacity
+              style={[s.devBtn, { marginTop: 8 }]}
+              onPress={async () => {
+                const uid = await AsyncStorage.getItem('userUid');
+                const cid = await AsyncStorage.getItem('coupleId');
+                const currentUid = auth.currentUser?.uid;
+                Alert.alert(
+                  'AsyncStorage & Auth',
+                  `userUid (저장): ${uid}\n` +
+                  `coupleId: ${cid}\n` +
+                  `auth.currentUser?.uid: ${currentUid}\n` +
+                  `일치: ${uid === currentUid ? 'O' : 'X'}`
+                );
+              }}
+            >
+              <Text style={[s.devBtnTxt, { color: '#1976D2' }]}>🔍 uid 확인</Text>
+            </TouchableOpacity>
+
+            {/* Firebase users 문서 확인 */}
+            <TouchableOpacity
+              style={[s.devBtn, { marginTop: 8 }]}
+              onPress={async () => {
+                const uid = auth.currentUser?.uid ?? (await AsyncStorage.getItem('userUid'));
+                if (!uid) { Alert.alert('uid 없음'); return; }
+                const snap = await getDoc(doc(db, 'users', uid));
+                if (snap.exists()) {
+                  const d = snap.data();
+                  Alert.alert(
+                    'users 문서',
+                    `myCode: ${d.myCode}\n` +
+                    `coupleId: ${d.coupleId}\n` +
+                    `email: ${d.email}\n` +
+                    `emailVerified: ${d.emailVerified}`
+                  );
+                } else {
+                  Alert.alert('users 문서 없음');
+                }
+              }}
+            >
+              <Text style={[s.devBtnTxt, { color: '#1976D2' }]}>📄 users 문서 확인</Text>
+            </TouchableOpacity>
+
+            {/* 로그아웃 시뮬레이션 (데이터 유지) */}
+            <TouchableOpacity
+              style={[s.devBtn, { marginTop: 8, backgroundColor: '#FFF9C4' }]}
+              onPress={async () => {
+                await signOut(auth);
+                await AsyncStorage.multiRemove(['coupleId', 'coupleRole', 'setupComplete', 'profileComplete']);
+                router.replace('/connect');
+              }}
+            >
+              <Text style={[s.devBtnTxt, { color: '#F57F17' }]}>🔄 로그아웃 (uid 유지)</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity style={s.devBtn} onPress={handleDevReset} activeOpacity={0.7}>
               <Text style={s.devBtnTxt}>🛠 초기화 (AsyncStorage 전체 삭제)</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={[s.devBtn, { marginTop: 8, backgroundColor: '#FFEBEE' }]} 
+
+            <TouchableOpacity
+              style={[s.devBtn, { marginTop: 8, backgroundColor: '#FFEBEE' }]}
               onPress={async () => {
-                Alert.alert('테스트', `coupleId: ${coupleId}, myUid: ${myUid}`);
-                if (!coupleId || !myUid) {
-                  Alert.alert('에러', '로드 안 됨');
-                  return;
-                }
                 try {
-                  Alert.alert('시작', '데이터 삭제 시작...');
                   await deleteAllCoupleData(myUid, coupleId);
-                  Alert.alert('완료', '데이터 삭제 완료');
                   router.replace('/connect');
                 } catch (e) {
                   Alert.alert('실패', String(e));
                 }
-              }} 
+              }}
               activeOpacity={0.7}
             >
-              <Text style={[s.devBtnTxt, { color: '#C62828' }]}>🔥 즉시 연결 끊기 & 데이터 삭제</Text>
+              <Text style={[s.devBtnTxt, { color: '#C62828' }]}>🔥 즉시 연결 끊기</Text>
             </TouchableOpacity>
           </View>
         )}

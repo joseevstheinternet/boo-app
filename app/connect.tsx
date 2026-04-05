@@ -8,6 +8,7 @@ import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Image,
   Keyboard,
@@ -408,6 +409,25 @@ export default function ConnectScreen() {
       {/* 개발 모드 전용 */}
       {__DEV__ && (
         <>
+          {/* uid 확인 */}
+          <TouchableOpacity
+            style={[styles.devBtn, { marginTop: 12, backgroundColor: '#E3F2FD' }]}
+            onPress={async () => {
+              const uid = auth.currentUser?.uid ?? (await AsyncStorage.getItem('userUid')) ?? '';
+              const cid = await AsyncStorage.getItem('coupleId') ?? '';
+              const myCode = await AsyncStorage.getItem('myInviteCode') ?? '';
+              Alert.alert(
+                'Connect 화면 - uid 확인',
+                `auth.currentUser?.uid: ${auth.currentUser?.uid || 'null'}\n` +
+                `AsyncStorage userUid: ${uid}\n` +
+                `coupleId: ${cid || '없음'}\n` +
+                `myCode: ${myCode || '로딩 중...'}`
+              );
+            }}
+          >
+            <Text style={[styles.devBtnText, { color: '#1565C0' }]}>🔍 uid 확인</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.devBtn}
             onPress={async () => {
@@ -418,12 +438,6 @@ export default function ConnectScreen() {
           >
             <Text style={styles.devBtnText}>테스트로 홈 이동</Text>
           </TouchableOpacity>
-          {/* <TouchableOpacity
-            style={styles.devBtn}
-            onPress={() => router.replace('/')}
-          >
-            <Text style={styles.devBtnText}>← splash로 이동</Text>
-          </TouchableOpacity> */}
         </>
       )}
       </View>
