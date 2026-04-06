@@ -16,8 +16,9 @@ import {
   orderBy,
   query,
   setDoc,
+  startAfter,
   updateDoc,
-  writeBatch,
+  writeBatch
 } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref as sRef, uploadBytes } from 'firebase/storage';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -43,7 +44,6 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePartnerProfile } from '../contexts/PartnerProfileContext';
 import { useProfile } from '../contexts/ProfileContext';
@@ -274,7 +274,6 @@ function MessageRow({
   highlightId: string | null;
   setHighlightId: (id: string | null) => void;
 }) {
-  const swipeRef = useRef<Swipeable>(null);
   const { data: msg, showAvatar, isFirst, isLast, isSingle } = item;
   const isMe    = msg.senderId === myUid;
   const radiusStyle = getBubbleRadius(isMe, isSingle, isFirst, isLast);
@@ -315,28 +314,6 @@ function MessageRow({
 
   return (
     <View style={{ marginBottom: isLast || isSingle ? 8 : 2 }}>
-    <Swipeable
-      ref={swipeRef}
-      friction={2}
-      rightThreshold={40}
-      overshootRight={false}
-      useNativeAnimations={true}
-      shouldCancelWhenOutside={false}
-      enableTrackpadTwoFingerGesture={false}
-      renderRightActions={() => (
-        <View style={{ justifyContent: 'center', alignItems: 'flex-end', paddingRight: 12, width: 50 }}>
-          <Text style={{ fontSize: 22 }}>↩️</Text>
-        </View>
-      )}
-      onSwipeableOpen={(direction) => {
-        if (direction === 'right') {
-          setReplyTo(msg);
-          setTimeout(() => swipeRef.current?.close(), 50);
-        } else {
-          swipeRef.current?.close();
-        }
-      }}
-    >
       {isMe ? (
         <View style={s.rowRight}>
           <View style={s.metaRight}>
@@ -445,7 +422,6 @@ function MessageRow({
           {isLast && <Text style={s.timeLeft}>{time}</Text>}
         </View>
       )}
-    </Swipeable>
     </View>
   );
 }
@@ -480,7 +456,7 @@ export default function ChatScreen() {
 
   const flatListRef       = useRef<FlatList>(null);
   const isNearBottomRef   = useRef(true);
-  const dailySyncedRef    = useRef(false);
+  const isLoadingMoreRef  = useRef(false);
   const lastVisibleDocRef = useRef<any>(null);
   const unsubscribeRef = useRef<() => void>();
   const prevMessagesLengthRef = useRef(0);
@@ -542,13 +518,15 @@ export default function ChatScreen() {
 
       setMessages(data);
 
-      setTimeout(() => {
-        try {
-          flatListRef.current?.scrollToEnd({ animated: false });
-        } catch (e) {
-          console.error('❌ Scroll error:', e);
-        }
-      }, 500);
+      // 가장 오래된 doc 저장 (desc 정렬이라 마지막이 가장 오래된 것)
+      if (snap.docs.length > 0) {
+        lastVisibleDocRef.current = snap.docs[snap.docs.length - 1];
+      }
+
+      // 50개 미만이면 더 이상 로드할 메시지가 없음
+      if (snap.docs.length < 50) {
+        setHasMore(false);
+      }
     });
 
     return () => unsubscribe();
@@ -567,93 +545,13 @@ export default function ChatScreen() {
     batch.commit().catch(console.error);
   }, [messages, coupleId, myUid]);
 
-  // ── daily 컬렉션 동기화 (백그라운드에서 전체 메시지 카운트, 초기 진입 시 한 번만) ──────────────
-
-  useEffect(() => {
-    if (!coupleId || dailySyncedRef.current) return;
-
-    const syncDaily = async () => {
-      try {
-        const q = query(
-          collection(db, 'couples', coupleId, 'messages'),
-          orderBy('createdAt', 'asc'),
-        );
-        const snap = await getDocs(q);
-
-        // 전체 메시지를 날짜별로 집계
-        const dailyMap: Record<string, number> = {};
-        snap.docs.forEach(doc => {
-          const createdAt = doc.data().createdAt;
-          if (createdAt) {
-            const dateStr = toKey(createdAt.toDate());
-            dailyMap[dateStr] = (dailyMap[dateStr] ?? 0) + 1;
-          }
-        });
-
-        // daily 컬렉션에 배치 업데이트
-        const batch = writeBatch(db);
-        Object.entries(dailyMap).forEach(([dateStr, count]) => {
-          batch.set(
-            doc(db, 'couples', coupleId, 'daily', dateStr),
-            { count },
-            { merge: true }
-          );
-        });
-        await batch.commit();
-        dailySyncedRef.current = true;
-      } catch (e) {
-        console.error('daily sync error:', e);
-      }
-    };
-
-    syncDaily();
-  }, [coupleId]);
-
-  // ── 초기 스크롤: 안 읽은 메시지 또는 최신 메시지로 ─────────────────────────
-
-  useEffect(() => {
-    if (messages.length === 0) return;
-
-    // 초기 로드 완료 후 스크롤 (delayed)
-    const t = setTimeout(() => {
-      const chatItems = buildChatItems(messages, myUid);
-
-      const firstUnreadIdx = chatItems.findIndex(item =>
-        item.type === 'message' && item.data.senderId !== myUid && !item.data.read
-      );
-
-      if (firstUnreadIdx >= 0) {
-        try {
-          flatListRef.current?.scrollToIndex({
-            index: firstUnreadIdx,
-            viewPosition: 0.3,
-            animated: false,
-          });
-        } catch {
-          // scrollToIndex 실패 시 fallback
-          flatListRef.current?.scrollToEnd({ animated: false });
-        }
-      } else {
-        flatListRef.current?.scrollToEnd({ animated: false });
-      }
-    }, 200); // 타이밍을 200ms로 늘림
-
-    return () => clearTimeout(t);
-  }, [messages, myUid]);
-
   // ── 새 메시지 자동 스크롤 (이전 메시지 길이 추적) ──────────────────────────
 
   useEffect(() => {
     if (messages.length === 0) return;
-
-    // 메시지가 추가되었고 하단 근처에 있으면 자동 스크롤
     if (messages.length > prevMessagesLengthRef.current) {
       if (isNearBottomRef.current) {
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 50);
-      } else {
-        setShowNewMsg(true);
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       }
     }
     prevMessagesLengthRef.current = messages.length;
@@ -661,29 +559,48 @@ export default function ChatScreen() {
 
   function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-    const dist = contentSize.height - layoutMeasurement.height - contentOffset.y;
-    isNearBottomRef.current = dist < 100;
+    isNearBottomRef.current = contentOffset.y < 100;
     if (isNearBottomRef.current && showNewMsg) setShowNewMsg(false);
+
+    // inverted: 상단(오래된 메시지) = contentOffset.y가 큰 쪽
+    if (contentOffset.y > contentSize.height - layoutMeasurement.height - 50 && !isLoadingMoreRef.current && hasMore) {
+      handleLoadMore();
+    }
   }
 
   async function handleLoadMore() {
     if (loadingMore || !hasMore || !coupleId || !lastVisibleDocRef.current) return;
 
     setLoadingMore(true);
+    isLoadingMoreRef.current = true;
     try {
       const q = query(
         collection(db, 'couples', coupleId, 'messages'),
         orderBy('createdAt', 'desc'),
-        limit(50),
-        // startAfter를 사용해 마지막 문서 이후로 로드
+        startAfter(lastVisibleDocRef.current),
+        limit(50)
       );
-      // 실제로는 startAfter 구현이 필요하지만,
-      // 현재는 최근 50개만 유지하므로 주석 처리
-      // 나중에 무한 스크롤이 필요하면 활성화
+      const snap = await getDocs(q);
+      if (snap.docs.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      const older = snap.docs.map(d => ({ id: d.id, ...d.data() } as Message)).reverse();
+      lastVisibleDocRef.current = snap.docs[snap.docs.length - 1];
+
+      if (snap.docs.length < 50) setHasMore(false);
+
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(m => m.id));
+        const deduped = older.filter(m => !existingIds.has(m.id));
+        return [...deduped, ...prev];
+      });
     } catch (e) {
       console.error('load more error:', e);
     } finally {
       setLoadingMore(false);
+      isLoadingMoreRef.current = false;
     }
   }
 
@@ -863,30 +780,23 @@ export default function ChatScreen() {
           <View style={{ flex: 1 }}>
               <FlatList
                 ref={flatListRef}
-                data={chatItems}
-                keyExtractor={(item, i) =>
-                  item.type === 'separator' ? `sep-${item.label}-${i}` : item.data.id
+                data={[...chatItems].reverse()}
+                inverted={true}
+                keyExtractor={(item) =>
+                  item.type === 'separator' ? `sep-${item.label}` : item.data.id
                 }
                 contentContainerStyle={s.listContent}
                 scrollEventThrottle={16}
                 onScroll={handleScroll}
                 keyboardShouldPersistTaps="handled"
-                onScrollToIndexFailed={({ index }) => {
-                  flatListRef.current?.scrollToOffset({ offset: index * 60, animated: true });
-                }}
               onScrollBeginDrag={Keyboard.dismiss}
                 initialNumToRender={20}
                 maxToRenderPerBatch={10}
                 windowSize={10}
                 removeClippedSubviews={true}
-                onEndReached={handleLoadMore}
-                onEndReachedThreshold={0.5}
                 scrollEnabled={true}
                 nestedScrollEnabled={true}
-                onContentSizeChange={() => {
-                  console.log('📏 Content size changed');
-                  flatListRef.current?.scrollToEnd({ animated: false });
-                }}
+                ListFooterComponent={loadingMore ? <ActivityIndicator color="#F17088" style={{ paddingVertical: 12 }} /> : null}
                 renderItem={({ item }) => {
                   if (item.type === 'separator') {
                     return (
@@ -925,7 +835,7 @@ export default function ChatScreen() {
                 </View>
               )}
 
-              {/* 새 메시지 버튼 */}
+              {/* 새 메시지 버튼 (초기 진입 안정화 후 다시 추가)
               {showNewMsg && (
                 <TouchableOpacity
                   style={s.newMsgBtn}
@@ -934,6 +844,7 @@ export default function ChatScreen() {
                   <Text style={s.newMsgTxt}>새 메시지가 있어요 👇</Text>
                 </TouchableOpacity>
               )}
+              */}
           </View>
         )}
 
