@@ -124,7 +124,7 @@ export default function ConnectScreen() {
           router.replace({ pathname: '/setup', params: { coupleId: cid } } as never);
         }
       } catch (e) {
-        console.error('partner poll error:', e);
+        // poll error silently ignored
       }
     }, 2500);
 
@@ -136,7 +136,6 @@ export default function ConnectScreen() {
   async function initUser() {
     try {
       const uid = auth.currentUser?.uid ?? (await AsyncStorage.getItem('userUid')) ?? '';
-      console.log('uid:', uid);
 
       if (!uid) {
         setLoadingCode(false);
@@ -145,21 +144,17 @@ export default function ConnectScreen() {
 
       // Firebase에서 확인 (AsyncStorage 캐시 무시)
       const userSnap = await getDoc(doc(db, 'users', uid));
-      console.log('Firebase myCode:', userSnap.data()?.myCode);
 
       if (userSnap.exists() && userSnap.data().myCode) {
         const code = userSnap.data().myCode;
-        console.log('Found in Firebase:', code);
         await AsyncStorage.setItem('myInviteCode', code);
         setMyCode(code);
       } else {
-        console.log('Not found in Firebase, creating new code');
         const code = await createUniqueCode(uid);
-        console.log('Created:', code);
         setMyCode(code);
       }
     } catch (e) {
-      console.error('initUser error:', e);
+      // initUser error silently ignored
     } finally {
       setLoadingCode(false);
     }
@@ -178,25 +173,18 @@ export default function ConnectScreen() {
     }
 
     if (attempts >= 10) {
-      console.error('Failed to generate unique code after 10 attempts');
       throw new Error('코드 생성 실패');
     }
 
-    console.log('Saving invite code:', code, 'for uid:', uid);
-
     try {
       await setDoc(doc(db, 'invite_codes', code), { uid, createdAt: new Date() });
-      console.log('Saved to invite_codes');
 
       await setDoc(doc(db, 'users', uid), { myCode: code }, { merge: true });
-      console.log('Saved to users');
 
       await AsyncStorage.setItem('myInviteCode', code);
-      console.log('Saved to AsyncStorage');
 
       return code;
     } catch (e) {
-      console.error('createUniqueCode error:', e);
       throw e;
     }
   }
@@ -307,7 +295,6 @@ export default function ConnectScreen() {
       navigatingRef.current = true;
       router.replace({ pathname: '/setup', params: { coupleId } } as never);
     } catch (e: any) {
-      console.error('connect error:', e);
       const msg = e.code === 'permission-denied'
         ? '권한이 없어요'
         : e.message
@@ -427,44 +414,6 @@ export default function ConnectScreen() {
       {/* Toast */}
       <Toast key={toast.key} message={toast.message} visible={toast.visible} />
 
-      {/* 개발 모드 전용 */}
-      {__DEV__ && (
-        <>
-          {/* uid 확인 */}
-          <TouchableOpacity
-            style={[styles.devBtn, { marginTop: 12, backgroundColor: '#E3F2FD' }]}
-            onPress={async () => {
-              console.log('🔍 uid 확인 버튼 눌렸음');
-              const uid = auth.currentUser?.uid ?? (await AsyncStorage.getItem('userUid')) ?? '';
-              const cid = await AsyncStorage.getItem('coupleId') ?? '';
-              const myCode = await AsyncStorage.getItem('myInviteCode') ?? '';
-              console.log('uid:', uid);
-              console.log('coupleId:', cid);
-              console.log('myCode:', myCode);
-              Alert.alert(
-                'Connect 화면 - uid 확인',
-                `auth.currentUser?.uid: ${auth.currentUser?.uid || 'null'}\n` +
-                `AsyncStorage userUid: ${uid}\n` +
-                `coupleId: ${cid || '없음'}\n` +
-                `myCode: ${myCode || '로딩 중...'}`
-              );
-            }}
-          >
-            <Text style={[styles.devBtnText, { color: '#1565C0' }]}>🔍 uid 확인</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.devBtn}
-            onPress={async () => {
-              await AsyncStorage.setItem('coupleId', 'test-couple-1');
-              await AsyncStorage.setItem('setupComplete', 'true');
-              router.replace('/(tabs)/home');
-            }}
-          >
-            <Text style={styles.devBtnText}>테스트로 홈 이동</Text>
-          </TouchableOpacity>
-        </>
-      )}
       </View>
     </SafeAreaView>
     </TouchableWithoutFeedback>
@@ -643,18 +592,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // 개발 모드 전용
-  devBtn: {
-    marginTop: 12,
-    alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: '#E0E0E0',
-  },
-  devBtnText: {
-    fontFamily: 'NotoSansKR-Regular',
-    fontSize: 12,
-    color: '#666666',
-  },
 });

@@ -27,8 +27,6 @@ export default function SplashScreen() {
   }, []);
 
   useEffect(() => {
-    //if (__DEV__) return; // DEV 모드에서는 라우팅 안 함
-
     let cancelled = false;
 
     async function init() {
@@ -58,9 +56,7 @@ export default function SplashScreen() {
           }
         }
       } catch (e: any) {
-        console.warn('auth init error:', e?.code, e?.message);
-        // too-many-requests 등 에러 → AsyncStorage uid만 남겨두고 진행
-        // (Firestore 호출은 각 화면에서 다시 시도)
+        // auth init error silently ignored — continue with AsyncStorage uid
       }
 
       if (cancelled) return;

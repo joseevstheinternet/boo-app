@@ -156,7 +156,7 @@ export default function ConnectLoadingScreen() {
             setStatusLabel('상대방이 프로필을 설정하고 있어요');
           }
         }
-      }, e => console.error('snapshot error:', e));
+      }, _e => {});
     }
 
     setup();

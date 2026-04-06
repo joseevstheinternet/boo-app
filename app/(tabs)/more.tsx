@@ -239,7 +239,7 @@ export default function MoreScreen() {
         }
       }
     } catch (e) {
-      console.error('more load error:', e);
+      // load error silently ignored
     } finally {
       setLoading(false);
     }
@@ -520,6 +520,10 @@ export default function MoreScreen() {
       const credential = EmailAuthProvider.credential(email.trim(), TEMP_PW);
       await linkWithCredential(user, credential);
 
+      // linkWithCredential 후 uid가 바뀌므로 prevUid 저장
+      await AsyncStorage.setItem('prevUid', prevUid);
+      await AsyncStorage.setItem('userUid', auth.currentUser?.uid ?? '');
+
       // 2. 임시 비밀번호로 로그인한 상태 → 이메일 검증 메일 발송
       await sendEmailVerification(user);
 
@@ -643,6 +647,9 @@ export default function MoreScreen() {
       setMyUid(user.uid);
       setHasEmail(true);
 
+      // 마이그레이션 완료 후 prevUid 정리
+      await AsyncStorage.removeItem('prevUid');
+
       closeEmailModal();
       Alert.alert('계정이 등록됐어요 ✓');
     } catch (e: any) {
@@ -738,7 +745,7 @@ export default function MoreScreen() {
             return;
           }
         }
-        console.error('account delete error:', e);
+        // account delete error silently ignored
       }
 
       // 완전히 초기화 확인
@@ -752,7 +759,7 @@ export default function MoreScreen() {
     try {
       await AsyncStorage.multiRemove(['coupleId', 'coupleRole', 'setupComplete', 'profileComplete']);
     } catch (e) {
-      console.error('AsyncStorage clear error:', e);
+      // AsyncStorage clear error silently ignored
     }
   }
 
@@ -849,7 +856,6 @@ export default function MoreScreen() {
             if (!canShare) { Alert.alert('공유 기능을 사용할 수 없어요.'); return; }
             await Sharing.shareAsync(filePath, { mimeType: 'text/plain', dialogTitle: '대화 내역 내보내기' });
           } catch (e) {
-            console.error('export error:', e);
             Alert.alert('내보내기에 실패했어요.');
           } finally {
             setExporting(false);
@@ -904,7 +910,6 @@ export default function MoreScreen() {
 
       showToast(`${parsed.length}개의 메시지를 불러왔어요`);
     } catch (e) {
-      console.error('import error:', e);
       Alert.alert('불러오기에 실패했어요.');
     } finally {
       setImporting(false);
@@ -944,19 +949,6 @@ export default function MoreScreen() {
   }
 
   // ── 개발 초기화 ─────────────────────────────────────────────────────────────
-
-  async function handleDevReset() {
-    Alert.alert('초기화', 'AsyncStorage를 전부 지우고 /connect로 이동해요.', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '초기화', style: 'destructive',
-        onPress: async () => {
-          await AsyncStorage.clear();
-          router.replace('/connect');
-        },
-      },
-    ]);
-  }
 
   // ── 렌더 ────────────────────────────────────────────────────────────────────
 
@@ -1109,86 +1101,6 @@ export default function MoreScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── 개발 모드 ─────────────────────────────────────────────────────── */}
-        {__DEV__ && (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>개발</Text>
-
-            {/* AsyncStorage 확인 */}
-            <TouchableOpacity
-              style={[s.devBtn, { marginTop: 8 }]}
-              onPress={async () => {
-                const uid = await AsyncStorage.getItem('userUid');
-                const cid = await AsyncStorage.getItem('coupleId');
-                const currentUid = auth.currentUser?.uid;
-                Alert.alert(
-                  'AsyncStorage & Auth',
-                  `userUid (저장): ${uid}\n` +
-                  `coupleId: ${cid}\n` +
-                  `auth.currentUser?.uid: ${currentUid}\n` +
-                  `일치: ${uid === currentUid ? 'O' : 'X'}`
-                );
-              }}
-            >
-              <Text style={[s.devBtnTxt, { color: '#1976D2' }]}>🔍 uid 확인</Text>
-            </TouchableOpacity>
-
-            {/* Firebase users 문서 확인 */}
-            <TouchableOpacity
-              style={[s.devBtn, { marginTop: 8 }]}
-              onPress={async () => {
-                const uid = auth.currentUser?.uid ?? (await AsyncStorage.getItem('userUid'));
-                if (!uid) { Alert.alert('uid 없음'); return; }
-                const snap = await getDoc(doc(db, 'users', uid));
-                if (snap.exists()) {
-                  const d = snap.data();
-                  Alert.alert(
-                    'users 문서',
-                    `myCode: ${d.myCode}\n` +
-                    `coupleId: ${d.coupleId}\n` +
-                    `email: ${d.email}\n` +
-                    `emailVerified: ${d.emailVerified}`
-                  );
-                } else {
-                  Alert.alert('users 문서 없음');
-                }
-              }}
-            >
-              <Text style={[s.devBtnTxt, { color: '#1976D2' }]}>📄 users 문서 확인</Text>
-            </TouchableOpacity>
-
-            {/* 로그아웃 시뮬레이션 (데이터 유지) */}
-            <TouchableOpacity
-              style={[s.devBtn, { marginTop: 8, backgroundColor: '#FFF9C4' }]}
-              onPress={async () => {
-                await signOut(auth);
-                await AsyncStorage.multiRemove(['coupleId', 'coupleRole', 'setupComplete', 'profileComplete']);
-                router.replace('/connect');
-              }}
-            >
-              <Text style={[s.devBtnTxt, { color: '#F57F17' }]}>🔄 로그아웃 (uid 유지)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={s.devBtn} onPress={handleDevReset} activeOpacity={0.7}>
-              <Text style={s.devBtnTxt}>🛠 초기화 (AsyncStorage 전체 삭제)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[s.devBtn, { marginTop: 8, backgroundColor: '#FFEBEE' }]}
-              onPress={async () => {
-                try {
-                  await deleteAllCoupleData(myUid, coupleId);
-                  router.replace('/connect');
-                } catch (e) {
-                  Alert.alert('실패', String(e));
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={[s.devBtnTxt, { color: '#C62828' }]}>🔥 즉시 연결 끊기</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
       </ScrollView>
 
@@ -1608,20 +1520,6 @@ const s = StyleSheet.create({
     fontFamily: 'Pretendard-Medium',
     fontSize: 15,
     color: '#E05070',
-  },
-
-  devBtn: {
-    backgroundColor: '#FFF3E0',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#FFD0A0',
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  devBtnTxt: {
-    fontFamily: 'Pretendard-Medium',
-    fontSize: 14,
-    color: '#E65100',
   },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },

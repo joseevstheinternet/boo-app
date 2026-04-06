@@ -51,7 +51,7 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('myInviteCode', code);
       }
     } catch (e) {
-      console.error('handleBack error:', e);
+      // error silently ignored
     } finally {
       router.replace('/connect');
     }

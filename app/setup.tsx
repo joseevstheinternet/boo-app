@@ -107,7 +107,6 @@ export default function SetupScreen() {
       const downloadURL = await getDownloadURL(sRef);
       setRemoteUri(downloadURL);
     } catch (e) {
-      console.error('upload error:', e);
       Alert.alert('업로드 실패', '이미지 업로드에 실패했어요. 다시 시도해주세요.');
       setLocalUri(null);
     } finally {
@@ -150,7 +149,6 @@ export default function SetupScreen() {
       await AsyncStorage.setItem('setupComplete', 'true');
       router.replace('/connect-loading');
     } catch (e) {
-      console.error('save error:', e);
       Alert.alert('저장 실패', '저장에 실패했어요. 다시 시도해주세요.');
     } finally {
       setSaving(false);

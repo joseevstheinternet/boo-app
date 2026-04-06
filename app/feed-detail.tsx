@@ -531,7 +531,7 @@ export default function FeedDetailScreen() {
         });
       }).catch(() => {});
     } catch (e) {
-      console.error('feed-detail init error:', e);
+      // init error silently ignored
     } finally {
       setLoadingPost(false);
     }

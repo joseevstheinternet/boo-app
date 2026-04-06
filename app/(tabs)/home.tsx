@@ -277,7 +277,7 @@ export default function HomeScreen() {
           isPrimary: d.data().isPrimary ?? false,
         })));
       },
-      err => console.error('anniversaries listener error:', err),
+      _err => {},
     );
     return () => unsub();
   }, [coupleId]);
@@ -314,7 +314,6 @@ export default function HomeScreen() {
         () => setLoading(false),
       );
     } catch (e) {
-      console.error('load error:', e);
       setLoading(false);
     }
   }
@@ -341,7 +340,7 @@ export default function HomeScreen() {
         items.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
         setAlbumItems(items);
       },
-      err => console.error('album listener error:', err),
+      _err => {},
     );
     return () => unsubAlbumRef.current?.();
   }, [coupleId]);
@@ -367,7 +366,7 @@ export default function HomeScreen() {
         });
         setDailyCounts(counts);
       },
-      err => console.error('daily listener error:', err),
+      _err => {},
     );
     return () => unsubDailyRef.current?.();
   }, [coupleId]);
@@ -417,9 +416,7 @@ export default function HomeScreen() {
 
       setUploadingBanner(true);
       const uri = image.path.startsWith('file://') ? image.path : `file://${image.path}`;
-      console.log('crop image.path:', uri);
       const blob = await fetch(uri).then(r => r.blob());
-      console.log('blob type:', blob.type);
       const storage = getStorage(auth.app);
 
       // 기존 배너 사진 삭제
@@ -471,7 +468,7 @@ export default function HomeScreen() {
       });
       await batch.commit();
     } catch (e) {
-      console.error('set primary error:', e);
+      // error silently ignored
     }
   }
 
@@ -1110,7 +1107,7 @@ const s = StyleSheet.create({
     backgroundColor: '#F5ECEE', borderRadius: 10, padding: 10,
   },
   tooltipDot:  { width: 12, height: 12, borderRadius: 4 },
-  tooltipTxt:  { fontFamily: 'Pretendard-Regular', fontSize: 12, color: '#2D1B1E' },
+  tooltipTxt:  { fontFamily: 'Pretendard-Regular', fontSize: 12, color: '#2D1B1E', lineHeight: 16 },
   legend:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 1 },
   legendCell:  { width: 11, height: 11, borderRadius: 2 },
 
