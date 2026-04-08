@@ -1,5 +1,4 @@
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { BlurView } from 'expo-blur';
 import { Tabs, router, usePathname } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -99,7 +98,7 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
 
   return (
     <View style={[s.container, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-      <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.88)' }]} />
       <View style={s.row}>
         {renderPill(LEFT_TABS,  LEFT_ICONS,  leftSlide,  leftOpacity,  [0, feedCount])}
 
@@ -132,11 +131,7 @@ export default function TabLayout() {
         contentStyle: { paddingBottom: 90 },
       }}
       tabBarBackground={() => (
-        <BlurView
-          intensity={80}
-          tint="light"
-          style={StyleSheet.absoluteFill}
-        />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.9)' }]} />
       )}
     >
       <Tabs.Screen name="home" />

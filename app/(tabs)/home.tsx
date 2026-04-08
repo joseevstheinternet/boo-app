@@ -1,7 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { BlurView } from 'expo-blur';
 import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
@@ -664,7 +663,7 @@ export default function HomeScreen() {
           {/* ── 잔디 섹션 ─────────────────────────────────────────────── */}
           <View style={s.card}>
             {/* 배경 블러 */}
-            <BlurView intensity={30} tint="light" style={StyleSheet.absoluteFill} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.55)' }]} />
 
             <View style={s.cardHeader}>
               <Text style={s.cardTitle}>우리의 대화</Text>

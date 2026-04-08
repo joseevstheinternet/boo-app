@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BlurView } from 'expo-blur';
 import Constants from 'expo-constants';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -1166,7 +1165,6 @@ export default function MoreScreen() {
           style={[StyleSheet.absoluteFill, { opacity: emailBgOpacity }]}
           pointerEvents="none"
         >
-          <BlurView intensity={10} style={StyleSheet.absoluteFill} tint="dark" />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
         </Animated.View>
 
@@ -1275,7 +1273,6 @@ export default function MoreScreen() {
           style={[StyleSheet.absoluteFill, { opacity: accountManageBgOpacity }]}
           pointerEvents="none"
         >
-          <BlurView intensity={10} style={StyleSheet.absoluteFill} tint="dark" />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
         </Animated.View>
 
