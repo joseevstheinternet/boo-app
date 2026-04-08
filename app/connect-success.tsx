@@ -3,15 +3,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Dimensions, Image, Text,
+  Animated, Dimensions, Easing, Image, Text,
   TouchableOpacity, View,
 } from 'react-native';
-import Animated, {
-  Easing, useAnimatedStyle, useSharedValue,
-  withDelay, withSequence, withSpring, withTiming,
-} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
 
@@ -32,61 +28,49 @@ interface ParticleData {
   color: string;
 }
 
-// 24개 파티클을 균등 각도 + 약간의 지터로 생성 (모듈 로드 시 1회)
 const PARTICLES: ParticleData[] = Array.from({ length: 24 }, (_, i) => {
   const baseAngle = (i / 24) * 2 * Math.PI;
   const jitter    = (Math.random() - 0.5) * (Math.PI / 10);
   const angle     = baseAngle + jitter;
-  const distance  = 110 + Math.random() * 90;   // 110~200px
+  const distance  = 110 + Math.random() * 90;
   return {
     tx:       Math.cos(angle) * distance,
     ty:       Math.sin(angle) * distance,
-    duration: 800 + Math.random() * 400,          // 800~1200ms
-    delay:    Math.random() * 120,                // 0~120ms 스태거
-    size:     10 + Math.random() * 10,            // 10~20px
+    duration: 800 + Math.random() * 400,
+    delay:    Math.random() * 120,
+    size:     10 + Math.random() * 10,
     icon:     ICONS[i % ICONS.length],
     color:    COLORS[i % COLORS.length],
   };
 });
 
-// 화면 중앙 기준점 (프로필 영역 수직 중심)
 const BURST_LEFT = SW / 2;
 const BURST_TOP  = SH * 0.42;
 
 // ─── Particle ────────────────────────────────────────────────────────────────
 
-function Particle({ tx, ty, duration, delay, size, icon, color }: ParticleData) {
-  const opacity    = useSharedValue(0);
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const scale      = useSharedValue(1);
+function Particle({ tx, ty: tyTarget, duration, delay, size, icon, color }: ParticleData) {
+  const opacity    = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const scale      = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     const easeOut = Easing.out(Easing.cubic);
 
-    // 페이드: 빠르게 등장 → 천천히 소멸
-    opacity.value = withDelay(
-      delay,
-      withSequence(
-        withTiming(1,   { duration: duration * 0.15 }),
-        withTiming(0,   { duration: duration * 0.85, easing: Easing.in(Easing.quad) }),
-      ),
-    );
-    // 방사형 이동
-    translateX.value = withDelay(delay, withTiming(tx, { duration, easing: easeOut }));
-    translateY.value = withDelay(delay, withTiming(ty, { duration, easing: easeOut }));
-    // 크기 축소: 1 → 0.3
-    scale.value = withDelay(delay, withTiming(0.3, { duration, easing: easeOut }));
+    Animated.sequence([
+      Animated.delay(delay),
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(opacity, { toValue: 1, duration: duration * 0.15, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0, duration: duration * 0.85, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        ]),
+        Animated.timing(translateX, { toValue: tx,       duration, easing: easeOut, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: tyTarget, duration, easing: easeOut, useNativeDriver: true }),
+        Animated.timing(scale,      { toValue: 0.3,      duration, easing: easeOut, useNativeDriver: true }),
+      ]),
+    ]).start();
   }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-  }));
 
   return (
     <Animated.View
@@ -96,7 +80,10 @@ function Particle({ tx, ty, duration, delay, size, icon, color }: ParticleData) 
           left: BURST_LEFT - size / 2,
           top:  BURST_TOP  - size / 2,
         },
-        animStyle,
+        {
+          opacity,
+          transform: [{ translateX }, { translateY }, { scale }],
+        },
       ]}
     >
       <Ionicons name={icon as any} size={size} color={color} />
@@ -112,55 +99,45 @@ export default function ConnectSuccessScreen() {
   const [partnerNickname, setPartnerNickname] = useState('');
   const [partnerImage, setPartnerImage]       = useState('');
 
-  // 애니메이션
-  const profileOpacity = useSharedValue(0);
-  const profileY       = useSharedValue(20);
-  const heartScale     = useSharedValue(0);
-  const textOpacity    = useSharedValue(0);
-  const textY          = useSharedValue(16);
-  const btnOpacity     = useSharedValue(0);
-  const btnY           = useSharedValue(16);
-
-  const profileAnimStyle = useAnimatedStyle(() => ({
-    opacity:   profileOpacity.value,
-    transform: [{ translateY: profileY.value }],
-  }));
-  const heartAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: heartScale.value }],
-  }));
-  const textAnimStyle = useAnimatedStyle(() => ({
-    opacity:   textOpacity.value,
-    transform: [{ translateY: textY.value }],
-  }));
-  const btnAnimStyle = useAnimatedStyle(() => ({
-    opacity:   btnOpacity.value,
-    transform: [{ translateY: btnY.value }],
-  }));
+  const profileOpacity = useRef(new Animated.Value(0)).current;
+  const profileY       = useRef(new Animated.Value(20)).current;
+  const heartScale     = useRef(new Animated.Value(0)).current;
+  const textOpacity    = useRef(new Animated.Value(0)).current;
+  const textY          = useRef(new Animated.Value(16)).current;
+  const btnOpacity     = useRef(new Animated.Value(0)).current;
+  const btnY           = useRef(new Animated.Value(16)).current;
 
   useEffect(() => {
     loadData();
 
-    // 1. 프로필 영역
-    profileOpacity.value = withDelay(200, withTiming(1, { duration: 600 }));
-    profileY.value       = withDelay(200, withTiming(0, { duration: 600 }));
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(profileOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(profileY,       { toValue: 0, duration: 600, useNativeDriver: true }),
+      ]).start();
+    }, 200);
 
-    // 2. 하트 + 햅틱 + 파티클 버스트 동시
-    heartScale.value = withDelay(
-      400,
-      withSequence(
-        withSpring(1.2, { stiffness: 200, damping: 10 }),
-        withSpring(1,   { stiffness: 200, damping: 15 }),
-      ),
-    );
-    setTimeout(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success), 400);
+    setTimeout(() => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Animated.sequence([
+        Animated.spring(heartScale, { toValue: 1.2, tension: 200, friction: 10, useNativeDriver: true }),
+        Animated.spring(heartScale, { toValue: 1,   tension: 200, friction: 15, useNativeDriver: true }),
+      ]).start();
+    }, 400);
 
-    // 3. 텍스트
-    textOpacity.value = withDelay(700, withTiming(1, { duration: 500 }));
-    textY.value       = withDelay(700, withTiming(0, { duration: 500 }));
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(textOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.timing(textY,       { toValue: 0, duration: 500, useNativeDriver: true }),
+      ]).start();
+    }, 700);
 
-    // 4. 버튼
-    btnOpacity.value = withDelay(900, withTiming(1, { duration: 500 }));
-    btnY.value       = withDelay(900, withTiming(0, { duration: 500 }));
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(btnOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.timing(btnY,       { toValue: 0, duration: 500, useNativeDriver: true }),
+      ]).start();
+    }, 900);
   }, []);
 
   async function loadData() {
@@ -194,7 +171,6 @@ export default function ConnectSuccessScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#2F2F2F' }}>
 
-      {/* 파티클 버스트 레이어 (터치 이벤트 통과) */}
       <View
         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         pointerEvents="none"
@@ -204,14 +180,11 @@ export default function ConnectSuccessScreen() {
         ))}
       </View>
 
-      {/* 메인 콘텐츠 */}
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 40 }}>
 
-        {/* 프로필 행 */}
-        <Animated.View style={profileAnimStyle}>
+        <Animated.View style={{ opacity: profileOpacity, transform: [{ translateY: profileY }] }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
 
-            {/* 내 프로필 */}
             <View style={{ alignItems: 'center', gap: 8 }}>
               <Image
                 source={myImage ? { uri: myImage } : require('../assets/images/profile-default.png')}
@@ -226,12 +199,10 @@ export default function ConnectSuccessScreen() {
               </Text>
             </View>
 
-            {/* 중앙 하트 */}
-            <Animated.View style={heartAnimStyle}>
+            <Animated.View style={{ transform: [{ scale: heartScale }] }}>
               <Ionicons name="heart" size={32} color="#F17088" />
             </Animated.View>
 
-            {/* 상대방 프로필 */}
             <View style={{ alignItems: 'center', gap: 8 }}>
               <Image
                 source={partnerImage ? { uri: partnerImage } : require('../assets/images/profile-default.png')}
@@ -249,8 +220,7 @@ export default function ConnectSuccessScreen() {
           </View>
         </Animated.View>
 
-        {/* 텍스트 */}
-        <Animated.View style={[{ alignItems: 'center', gap: 12 }, textAnimStyle]}>
+        <Animated.View style={[{ alignItems: 'center', gap: 12 }, { opacity: textOpacity, transform: [{ translateY: textY }] }]}>
           <Text style={{ fontFamily: 'Pretendard-Bold', fontSize: 24,
             color: '#fff', letterSpacing: -0.24 }}>
             드디어 만났어요!
@@ -275,8 +245,7 @@ export default function ConnectSuccessScreen() {
 
       </View>
 
-      {/* 하단 버튼 */}
-      <Animated.View style={[{ paddingHorizontal: 25, paddingBottom: 20 }, btnAnimStyle]}>
+      <Animated.View style={[{ paddingHorizontal: 25, paddingBottom: 20 }, { opacity: btnOpacity, transform: [{ translateY: btnY }] }]}>
         <TouchableOpacity
           style={{
             height: 48, borderRadius: 40,

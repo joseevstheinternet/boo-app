@@ -4,7 +4,6 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { BlurView } from 'expo-blur';
 import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import ImageCropPicker from 'react-native-image-crop-picker';
 import { router } from 'expo-router';
 import {
   Timestamp,
@@ -403,40 +402,7 @@ export default function HomeScreen() {
   // ── 배너 업로드 ──────────────────────────────────────────────────────────
 
   async function handlePickBanner() {
-    try {
-      const image = await ImageCropPicker.openPicker({
-        width: BANNER_CROP_W,
-        height: BANNER_CROP_H,
-        cropping: true,
-        freeStyleCropEnabled: true,
-        cropperCircleOverlay: false,
-        compressImageQuality: 0.85,
-        mediaType: 'photo',
-      });
-
-      setUploadingBanner(true);
-      const uri = image.path.startsWith('file://') ? image.path : `file://${image.path}`;
-      const blob = await fetch(uri).then(r => r.blob());
-      const storage = getStorage(auth.app);
-
-      // 기존 배너 사진 삭제
-      if (bannerUri) {
-        try {
-          const oldPath = decodeURIComponent(bannerUri.split('/o/')[1].split('?')[0]);
-          await deleteObject(sRef(storage, oldPath));
-        } catch {}
-      }
-
-      const ref = sRef(storage, `banners/${coupleId}.jpg`);
-      await uploadBytes(ref, blob, { contentType: 'image/jpeg' });
-      const url = await getDownloadURL(ref);
-      setBannerUri(url);
-      await setDoc(doc(db, 'couples', coupleId), { bannerImage: url }, { merge: true });
-    } catch (e: any) {
-      if (e?.code !== 'E_PICKER_CANCELLED') Alert.alert('업로드에 실패했어요.');
-    } finally {
-      setUploadingBanner(false);
-    }
+    Alert.alert('임시 비활성화', '현재 업데이트 중이에요.');
   }
 
   // ── 기념일 저장 ──────────────────────────────────────────────────────────
