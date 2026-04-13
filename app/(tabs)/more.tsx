@@ -885,7 +885,7 @@ export default function MoreScreen() {
       const parsed: Array<{ createdAt: Timestamp; senderId: string; text: string; imported: boolean }> = [];
 
       for (const line of lines) {
-        const m = line.match(LINE_RE);
+        const m = LINE_RE.exec(line);
         if (!m) continue;
         const [, datePart, nick, text] = m;
         const [dateSeg, timeSeg] = datePart.split(' ');

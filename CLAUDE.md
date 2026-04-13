@@ -16,6 +16,26 @@
 - Test once, fix if needed, verify once. No unnecessary iterations.
 - Budget: 50 tool calls maximum. Work efficiently.
 
+## 프로젝트 명령
+- Metro 시작: `npx expo start --clear`
+- iOS 빌드: Xcode에서 Cmd+R (pod install 후)
+- 의존성 설치: `npm install && cd ios && pod install`
+- JS 엔진: JSC (Hermes 아님) — app.json의 `jsEngine: "jsc"` 유지
+- New Architecture: 활성화됨 (`newArchEnabled: true`)
+
+## 주의사항
+
+<important if="modifying packages or dependencies">
+native 모듈 추가/제거 시 반드시 `cd ios && pod install` 실행 후 Xcode 재빌드.
+JS만 수정해도 Metro 캐시 클리어 권장: `npx expo start --clear`
+</important>
+
+- `expo-blur` 사용 금지 — 제거됨. BlurView 대신 반투명 View 사용:
+  `<View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.88)' }]} />`
+- `expo-glass-effect`는 직접 사용하지 않지만 expo-router v55 의존성 — 절대 제거 금지
+- `patches/expo-glass-effect+55.0.10.patch` 존재 — npm install 후 자동 적용됨 (postinstall)
+- native 모듈 에러 후 "missing default export" 경고가 연달아 뜨는 건 cascading failure — 원인은 항상 첫 번째 ERROR
+
 ## 응답 스타일 — caveman 모드
 
 핵심만. 군더더기 없이.

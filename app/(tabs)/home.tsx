@@ -858,7 +858,7 @@ export default function HomeScreen() {
                               </View>
                             )}
                           </View>
-                          <Text style={s.annDate}>{ann.date.replace(/-/g, '.')}</Text>
+                          <Text style={s.annDate}>{ann.date.split('-').join('.')}</Text>
                         </View>
                         <Text style={s.dday}>{calcDday(ann)}</Text>
                         <TouchableOpacity
